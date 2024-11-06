@@ -59,20 +59,23 @@ pub fn is_digit(char: char) -> bool {
 /// assert_eq!(parse(b"max123"), Ok(("23", "1")));
 /// assert_eq!(parse(b"12max"), Ok(("2max", "1")));
 /// ```
-// fn take_while<I: IntoIterator, F: Fn(I) -> bool>(
-//     condition: F,
-// ) -> impl Fn(I) -> PResult<&str, &str> {
-//     move |source| {
-//         // let source_to_utf8 = std::str::from_utf8(source).expect("Coulnd't transform to utf8");
-//         for (idx, byte) in source.into_iter().enumerate() {
-//             if condition(byte) {
-//                 return Ok((&source_to_utf8[idx + 1..], &source_to_utf8[idx..idx + 1]));
-//             }
-//         }
-//
-//         Err(ParserError::NoMatch)
-//     }
-// }
+///
+fn take_while<'a, F, I>(condition: F) -> impl Fn(&'a [u8]) -> KResult<&'a str, &'a str>
+where
+    I: From<u8>,
+    F: Fn(I) -> bool,
+{
+    move |source| {
+        if let Some(index) = source.iter().position(|&e| condition(e.into())) {
+            let input = std::str::from_utf8(&source[index + 1..]).expect("This should work bruh");
+            let result =
+                std::str::from_utf8(&source[index..index + 1]).expect("This should work bruh");
+            Ok((input, result))
+        } else {
+            Err(ParserError::NoMatch)
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -85,22 +88,37 @@ mod tests {
         assert_eq!(parse(b"max#balej"), Ok(("balej", "#")))
     }
 
-    // #[test]
-    // fn take_while_n_test() {
-    //     let parse = take_while(is_digit);
-    //
-    //     assert_eq!(parse(b"max123"), Ok(("23", "1")));
-    //     assert_eq!(parse(b"12max"), Ok(("2max", "1")));
-    // }
+    #[test]
+    fn take_while_n_test() {
+        let parse = take_while(is_digit);
+
+        assert_eq!(parse(b"max123"), Ok(("23", "1")));
+        assert_eq!(parse(b"12max"), Ok(("2max", "1")));
+    }
     #[test]
     fn test_http_response_header() {
-        let input = "HTTP/1.x 200 OK";
+        let input = "HTTP/1.2 200 OK";
+
+        let test: &[u8] = &[1, 2, 3, 4];
+        let e = test[0];
+
         let (input, http) = tag("HTTP")(input.as_bytes()).expect("This should work, this is a bug");
         let (input, slash) = tag("/")(input.as_bytes()).expect("This should work, this is a bug");
+        let (input, number1) =
+            take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
+
+        let (input, dot) = tag(".")(input.as_bytes()).expect("This should work, this is a bug");
+
+        let (input, number2) =
+            take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
+
         // let (input, slash) =
         //     take_while_n(1, is_digit)(input.as_bytes()).expect("This should work, this is a bug");
 
         assert_eq!(http, "HTTP");
         assert_eq!(slash, "/");
+        assert_eq!(number1, "1");
+        assert_eq!(dot, ".");
+        assert_eq!(number2, "2");
     }
 }
