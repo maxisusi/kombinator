@@ -45,8 +45,8 @@ pub fn tag(pattern: &str) -> impl Fn(&[u8]) -> KResult<&str, &str> + '_ {
 pub fn is_digit(char: char) -> bool {
     char.is_ascii_digit()
 }
-/// Iterates over the input and slice the source
-/// if it respect the condition
+/// Consume the input and slice
+/// if it matches the predicate
 ///
 /// # Examples
 ///
@@ -60,7 +60,7 @@ pub fn is_digit(char: char) -> bool {
 /// assert_eq!(parse(b"12max"), Ok(("2max", "1")));
 /// ```
 ///
-fn take_while<'a, F, I>(condition: F) -> impl Fn(&'a [u8]) -> KResult<&'a str, &'a str>
+pub fn take_while<'a, F, I>(condition: F) -> impl Fn(&'a [u8]) -> KResult<&'a str, &'a str>
 where
     I: From<u8>,
     F: Fn(I) -> bool,
