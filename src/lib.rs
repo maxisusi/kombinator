@@ -12,6 +12,39 @@ pub enum ParserError {
 /// Parsing Result type
 pub type KResult<I, O, E = ParserError> = Result<(I, O), E>;
 
+/// Match the the pattern
+/// from the start of the source until
+/// pattern lenght
+///
+/// TODO: define errors
+/// # Examples
+///
+/// Basic usage:
+/// ```rust
+/// use kombinator::match;
+///
+/// // Define the parser
+///
+/// let parse = matching("http");
+///
+/// assert_eq!(parse(b"http 1"), Ok((" 1", "http")));
+/// ```
+pub fn matching<'a>(pattern: &'a str) -> impl Fn(&'a [u8]) -> KResult<&'a str, &'a str> {
+    move |source| {
+        for (idx, ch) in pattern.chars().enumerate() {
+            if source[idx] != ch as u8 {
+                return Err(ParserError::NoMatch);
+            }
+        }
+
+        let input =
+            std::str::from_utf8(&source[pattern.len()..]).expect("Coulnd't convert value to utf8");
+        let res =
+            std::str::from_utf8(&source[..pattern.len()]).expect("Couldn't convert value to utf8");
+
+        Ok((input, res))
+    }
+}
 /// Find the pattern from source and slice
 /// the input from the index
 ///
@@ -30,7 +63,7 @@ pub type KResult<I, O, E = ParserError> = Result<(I, O), E>;
 /// ```
 pub fn tag(pattern: &str) -> impl Fn(&[u8]) -> KResult<&str, &str> + '_ {
     move |source| {
-        let source_to_utf8 = std::str::from_utf8(source).expect("Coulnd't transform to utf8");
+        let source_to_utf8 = std::str::from_utf8(source).expect("Couldn't transform to utf8");
 
         if let Some(index) = source_to_utf8.find(pattern) {
             Ok((
@@ -91,6 +124,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn matching_test() {
+        let parse = matching("http");
+        assert_eq!(parse(b"http 1"), Ok((" 1", "http")));
+    }
+
+    #[test]
     fn tag_test() {
         let parse = tag("#");
         assert_eq!(parse(b"#123"), Ok(("123", "#")));
@@ -109,21 +148,24 @@ mod tests {
     fn test_http_response_header() {
         let input = "HTTP/1.2 200 OK";
 
-        let test: &[u8] = &[1, 2, 3, 4];
-        let e = test[0];
-
-        let (input, http) = tag("HTTP")(input.as_bytes()).expect("This should work, this is a bug");
-        let (input, slash) = tag("/")(input.as_bytes()).expect("This should work, this is a bug");
+        let (input, http) =
+            matching("HTTP")(input.as_bytes()).expect("This should work, this is a bug");
+        let (input, slash) =
+            matching("/")(input.as_bytes()).expect("This should work, this is a bug");
         let (input, number1) =
             take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
-        let (input, dot) = tag(".")(input.as_bytes()).expect("This should work, this is a bug");
+        let (input, dot) =
+            matching(".")(input.as_bytes()).expect("This should work, this is a bug");
         let (input, number2) =
             take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
-        let (input, space) = tag(" ")(input.as_bytes()).expect("This should work, this is a bug");
+        let (input, space) =
+            matching(" ")(input.as_bytes()).expect("This should work, this is a bug");
         let (input, two_hundred) =
             take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
-        let (input, space) = tag(" ")(input.as_bytes()).expect("This should work, this is a bug");
-        let (input, ok) = tag("OK")(input.as_bytes()).expect("This should work, this is a bug");
+        let (input, space) =
+            matching(" ")(input.as_bytes()).expect("This should work, this is a bug");
+        let (input, ok) =
+            matching("OK")(input.as_bytes()).expect("This should work, this is a bug");
 
         assert_eq!(http, "HTTP");
         assert_eq!(slash, "/");
