@@ -29,6 +29,7 @@ pub type KResult<I, O, E = ParserError> = Result<(I, O), E>;
 ///
 /// assert_eq!(parse(b"http 1"), Ok((" 1", "http")));
 /// ```
+#[deprecated(note = "please use `tag` instead")]
 pub fn matching<'a>(pattern: &'a str) -> impl Fn(&'a [u8]) -> KResult<&'a str, &'a str> {
     move |source| {
         for (idx, ch) in pattern.chars().enumerate() {
@@ -133,7 +134,12 @@ mod tests {
     fn tag_test() {
         let parse = tag("#");
         assert_eq!(parse(b"#123"), Ok(("123", "#")));
-        assert_eq!(parse(b"max#balej"), Ok(("balej", "#")))
+        assert_eq!(parse(b"max#balej"), Ok(("balej", "#")));
+
+        let parse = tag("http");
+
+        assert_eq!(parse(b"httvp"), Err(ParserError::NoMatch));
+        assert_eq!(parse(b"http"), Ok(("", "http")));
     }
 
     #[test]
