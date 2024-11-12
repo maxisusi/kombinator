@@ -71,6 +71,12 @@ impl<'a> InputLength for &'a [u8] {
     }
 }
 
+impl InputLength for char {
+    fn input_length(&self) -> usize {
+        self.len_utf8()
+    }
+}
+
 /// Operations to take input from abstract types
 pub trait InputTake: Sized {
     /// Takes the ownership of the input
@@ -99,6 +105,28 @@ impl<'a> InputTake for &'a [u8] {
         self
     }
 }
+
+/// Operations to take as much input as possible
+/// from the input until the predicate is false
+pub trait InputTakeAtPosition: Sized {
+    type Item;
+    fn split_at_position<P>(&self, predicate: P) -> KResult<Self, Self>
+    where
+        P: Fn(Self::Item) -> bool;
+}
+
+impl<'a> InputTakeAtPosition for &'a str {
+    type Item = u8;
+    fn split_at_position<P>(&self, predicate: P) -> KResult<Self, Self>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        match self.as_bytes().iter().position(|e| predicate(*e)) {
+            Some(e) => Ok(self.take_split(e)),
+            None => Err(ParserError::NoMatch),
+        }
+    }
+}
 /// Find the pattern from source and slice
 /// the input from the index
 ///
@@ -107,13 +135,13 @@ impl<'a> InputTake for &'a [u8] {
 /// Basic usage:
 ///
 /// ```rust
-/// use kombinator::tag;
+/// use kombinator::{tag, ParserError};
 ///
 /// // Define the pattern
 /// let parse = tag("#");
 ///
-/// assert_eq!(parse(b"#123"), Ok(("123", "#")));
-/// assert_eq!(parse(b"hello#world"), Ok(("world", "#")))
+/// assert_eq!(parse("#123"), Ok(("123", "#")));
+/// assert_eq!(parse("hello#world"), Err(ParserError::NoMatch))
 /// ```
 pub fn tag<I, E>(pattern: E) -> impl Fn(I) -> KResult<I, I>
 where
@@ -147,30 +175,18 @@ pub fn is_digit(char: char) -> bool {
 /// // Define the parser
 /// let parse = take_while(is_digit);
 ///
-/// assert_eq!(parse(b"max123"), Ok(("", "123")));
-/// assert_eq!(parse(b"12max"), Ok(("max", "12")));
+/// assert_eq!(parse("123max"), Ok(("max", "123")));
+/// assert_eq!(parse("12max"), Ok(("max", "12")));
+/// assert_eq!(parse("max123"), Ok(("max123", "")));
 /// ```
 ///
-pub fn take_while<'a, F, I>(condition: F) -> impl Fn(&'a [u8]) -> KResult<&'a str, &'a str>
+pub fn take_while<F, I, C>(condition: F) -> impl Fn(I) -> KResult<I, I>
 where
-    I: From<u8>,
-    F: Fn(I) -> bool,
+    I: InputTake + InputTakeAtPosition<Item = u8> + InputLength,
+    C: From<u8>,
+    F: Fn(C) -> bool,
 {
-    move |source| {
-        if let Some(start_index) = source.iter().position(|&e| condition(e.into())) {
-            let end_index = source[start_index..]
-                .iter()
-                .position(|ch| !condition(Into::into(*ch)))
-                .unwrap_or(source.len());
-
-            let input = std::str::from_utf8(&source[end_index..]).expect("This should work bruh");
-            let result = std::str::from_utf8(&source[start_index..end_index])
-                .expect("This should work bruh");
-            Ok((input, result))
-        } else {
-            Err(ParserError::NoMatch)
-        }
-    }
+    move |source| source.split_at_position(|e| !condition(e.into()))
 }
 
 #[cfg(test)]
@@ -193,8 +209,8 @@ mod tests {
     fn take_while_test() {
         let parse = take_while(is_digit);
 
-        assert_eq!(parse(b"max123"), Ok(("", "123")));
-        assert_eq!(parse(b"12max"), Ok(("max", "12")));
+        assert_eq!(parse("123max"), Ok(("max", "123")));
+        assert_eq!(parse("12max"), Ok(("max", "12")));
     }
 
     #[test]
@@ -204,13 +220,13 @@ mod tests {
         let (input, http) = tag("HTTP")(input).expect("This should work, this is a bug");
         let (input, slash) = tag("/")(input).expect("This should work, this is a bug");
         let (input, number1) =
-            take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
+            take_while(is_digit)(input).expect("This should work, this is a bug");
         let (input, dot) = tag(".")(input).expect("This should work, this is a bug");
         let (input, number2) =
-            take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
+            take_while(is_digit)(input).expect("This should work, this is a bug");
         let (input, space) = tag(" ")(input).expect("This should work, this is a bug");
         let (input, two_hundred) =
-            take_while(is_digit)(input.as_bytes()).expect("This should work, this is a bug");
+            take_while(is_digit)(input).expect("This should work, this is a bug");
         let (input, space) = tag(" ")(input).expect("This should work, this is a bug");
         let (input, ok) = tag("OK")(input).expect("This should work, this is a bug");
 
