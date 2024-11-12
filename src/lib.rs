@@ -162,6 +162,17 @@ where
 pub fn is_digit(char: char) -> bool {
     char.is_ascii_digit()
 }
+
+/// Checks if char is an ascii alphabetic
+pub fn is_alphabetic(char: char) -> bool {
+    char.is_alphabetic()
+}
+
+/// Checks if char is an ascii alphanumeric
+pub fn is_alphanumeric(char: char) -> bool {
+    char.is_alphanumeric()
+}
+
 /// Consume the input and slice
 /// if it matches the predicate
 ///
