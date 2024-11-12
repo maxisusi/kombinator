@@ -46,6 +46,55 @@ impl <'a, 'b> Compare<&'b str>  for &'a[u8] {
     }
 }
 
+impl <'a, 'b> Compare<&'b str>  for &'a str {
+    fn compare(&self, comp: &'b str) -> CompareResult {
+        self.as_bytes().compare(comp.as_bytes())
+    }
+}
+
+macro_rules! compare_impl {
+    ($($N:expr)+) => {
+        $(
+        
+            impl <'a> Compare<[u8; $N]>  for &'a[u8] {
+                fn compare(&self, comp: [u8;$N]) -> CompareResult {
+                    let res = self.iter().zip(comp.iter()).position(|(a, b)| a != b);
+
+                    match res {
+                        Some(_) => CompareResult::Error,
+                        None => {
+                            if self.len() >= comp.len() {
+                                CompareResult::Ok
+                            } else {
+                                CompareResult::Error
+                            }
+                        }
+                    }
+                }
+            }
+            impl <'a, 'b> Compare<&[u8; $N]>  for &'a[u8; $N] {
+                fn compare(&self, comp: &[u8;$N]) -> CompareResult {
+                    let res = self.iter().zip(comp.iter()).position(|(a, b)| a != b);
+
+                    match res {
+                        Some(_) => CompareResult::Error,
+                        None => {
+                            if self.len() >= comp.len() {
+                                CompareResult::Ok
+                            } else {
+                                CompareResult::Error
+                            }
+                        }
+                    }
+                }
+            }
+        )+
+        
+    };
+}
+
+compare_impl!(0 1 2 3 4 5 6 7 8 9 10);
+
 trait InputLength {
     fn input_length(&self) -> usize;
 }
@@ -138,7 +187,6 @@ impl <'a> InputTake for &'a [u8] {
 /// // Define the parser
 ///
 /// let parse = matching("http");
-///
 /// assert_eq!(parse(b"http 1"), Ok((" 1", "http")));
 /// ```
 #[deprecated(note = "please use `tag` instead")]
@@ -244,12 +292,12 @@ mod tests {
 
     #[test]
     fn tag_test() {
-        let parse = tag(b"#");
-        let parsed = parse(b"#123");
+        let parse = tag("#");
+        let parsed = parse("#123");
         // assert_eq!(parse(b"#123"), Ok((b"123", b"#")));
         // assert_eq!(parse(b"max#balej"), Ok(("balej", "#")));
 
-        let parse = tag("http");
+        let parse = tag("http")("hello");
 
         // assert_eq!(parse(b"httvp"), Err(ParserError::NoMatch));
         // assert_eq!(parse(b"http"), Ok(("", "http")));
