@@ -12,12 +12,15 @@ pub enum ParserError {
 /// Parsing Result type
 pub type KResult<I, O, E = ParserError> = Result<(I, O), E>;
 
+/// Comparison Result
 pub enum CompareResult {
     Ok,
     Error,
 }
 
+/// Operations to compare asbtract element together
 pub trait Compare<T> {
+    /// Compares itslef to another one and returns a [`CompareResult`]
     fn compare(&self, comp: T) -> CompareResult;
 }
 
@@ -50,7 +53,9 @@ impl<'a, 'b> Compare<&'b str> for &'a str {
     }
 }
 
+/// Operations to get the input length of abstract types
 pub trait InputLength {
+    /// Returns the length of the input as a `usize`
     fn input_length(&self) -> usize;
 }
 
@@ -60,15 +65,18 @@ impl<'a> InputLength for &'a str {
     }
 }
 
-// Imput length
 impl<'a> InputLength for &'a [u8] {
     fn input_length(&self) -> usize {
         self.len()
     }
 }
 
+/// Operations to take input from abstract types
 pub trait InputTake: Sized {
+    /// Takes the ownership of the input
     fn take(&self) -> Self;
+    /// Splits the input into two parts and takes the ownsership
+    /// First self represents the suffix and the second self represents the prefix
     fn take_split(&self, count: usize) -> (Self, Self);
 }
 
@@ -78,7 +86,7 @@ impl<'a> InputTake for &'a str {
         (suffix, prefix)
     }
     fn take(&self) -> Self {
-        todo!()
+        self
     }
 }
 
