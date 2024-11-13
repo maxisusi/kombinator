@@ -158,6 +158,7 @@ where
     }
 }
 
+/// Operations that represents a parser
 pub trait Parser<I> {
     fn parse(&self, source: I) -> KResult<I, I>;
 }
@@ -173,6 +174,23 @@ where
 
 /// Transform the result of a Parsing
 /// function to another type
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```rust
+/// use kombinator::{map_res, tag};
+///
+/// // Define the parsers
+/// let parse_one = tag("1");
+///
+/// let to_string = map_res(&parse_one, |suffix: &str| suffix.to_string());
+/// let to_digit = map_res(&parse_one, |suffix: &str| suffix.parse::<usize>().unwrap());
+///
+/// assert_eq!(to_string("123"), Ok(("23", "1".to_string())));
+/// assert_eq!(to_digit("123"), Ok(("23", 1)))
+/// ```
 pub fn map_res<T, U, I, O>(parser: T, transform: U) -> impl Fn(I) -> KResult<I, O>
 where
     I: Clone,
@@ -220,7 +238,6 @@ pub fn is_alphanumeric(char: char) -> bool {
 /// assert_eq!(parse("12max"), Ok(("max", "12")));
 /// assert_eq!(parse("max123"), Ok(("max123", "")));
 /// ```
-///
 pub fn take_while<F, I, C>(condition: F) -> impl Fn(I) -> KResult<I, I>
 where
     I: InputTake + InputTakeAtPosition<Item = u8> + InputLength,
@@ -228,6 +245,33 @@ where
     F: Fn(C) -> bool,
 {
     move |source| source.split_at_position(|e| !condition(e.into()))
+}
+
+/// Combine two parsers together
+/// and return the result of the first
+/// parser that matches
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```rust
+/// use kombinator::{either, tag, ParserError};
+///
+/// // Define the parsers
+/// let either_tag = either(tag("1"), tag("2"));
+///
+/// assert_eq!(either_tag("12"), Ok(("2", "1")));
+/// assert_eq!(either_tag("21"), Ok(("1", "2")));
+/// assert_eq!(either_tag("3"), Err(ParserError::NoMatch));
+/// ```
+pub fn either<P1, P2, I>(p1: P1, p2: P2) -> impl Fn(I) -> KResult<I, I>
+where
+    I: Clone,
+    P1: Parser<I>,
+    P2: Parser<I>,
+{
+    move |source| p1.parse(source.clone()).or(p2.parse(source))
 }
 
 #[cfg(test)]
@@ -265,11 +309,18 @@ mod tests {
     }
 
     #[test]
+    fn either_test() {
+        let either_tag = either(tag("1"), tag("2"));
+
+        assert_eq!(either_tag("12"), Ok(("2", "1")));
+        assert_eq!(either_tag("21"), Ok(("1", "2")));
+    }
+
+    #[test]
     fn test_http_response_header() {
         let input = "HTTP/1.2 200 OK";
 
-        let (input, http) = tag("HTTP")(input).expect("This should work, this is a bug");
-        let (input, slash) = tag("/")(input).expect("This should work, this is a bug");
+        let (input, http) = tag("HTTP/")(input).expect("This should work, this is a bug");
         let (input, number1) =
             take_while(is_digit)(input).expect("This should work, this is a bug");
         let (input, dot) = tag(".")(input).expect("This should work, this is a bug");
@@ -281,8 +332,7 @@ mod tests {
         let (input, space) = tag(" ")(input).expect("This should work, this is a bug");
         let (input, ok) = tag("OK")(input).expect("This should work, this is a bug");
 
-        assert_eq!(http, "HTTP");
-        assert_eq!(slash, "/");
+        assert_eq!(http, "HTTP/");
         assert_eq!(number1, "1");
         assert_eq!(dot, ".");
         assert_eq!(number2, "2");
