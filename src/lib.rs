@@ -110,7 +110,16 @@ impl<'a> InputTake for &'a [u8] {
 /// from the input until the predicate is false
 pub trait InputTakeAtPosition: Sized {
     type Item;
+
+    /// Split at position where the predicate doesn't match
+    /// the input
     fn split_at_position<P>(&self, predicate: P) -> KResult<Self, Self>
+    where
+        P: Fn(Self::Item) -> bool;
+
+    /// Split at position where the predicate doesn't match
+    /// the input but stop iterating at the specifie boundary
+    fn split_at_bounded_position<P>(&self, boundary: usize, predicate: P) -> KResult<Self, Self>
     where
         P: Fn(Self::Item) -> bool;
 }
@@ -124,6 +133,18 @@ impl<'a> InputTakeAtPosition for &'a str {
         match self.as_bytes().iter().position(|e| predicate(*e)) {
             Some(e) => Ok(self.take_split(e)),
             None => Err(ParserError::NoMatch),
+        }
+    }
+    fn split_at_bounded_position<P>(&self, boundary: usize, predicate: P) -> KResult<Self, Self>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        match self.as_bytes()[..boundary]
+            .iter()
+            .position(|e| predicate(*e))
+        {
+            Some(e) => Ok(self.take_split(e)),
+            None => Ok(self.take_split(boundary)),
         }
     }
 }
@@ -246,6 +267,31 @@ where
 {
     move |source| source.split_at_position(|e| !condition(e.into()))
 }
+/// Consume the input and slice
+/// if it matches the predicate
+/// but stop at the specified boundary
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```rust
+/// use kombinator::{take_while_n, is_digit};
+///
+/// // Define the parsers
+/// let parse = take_while_n(3, is_digit);
+///
+/// assert_eq!(parse("2000"), Ok(("0", "200")));
+/// assert_eq!(parse("300"), Ok(("", "300")));
+/// ```
+pub fn take_while_n<F, I, C>(n: usize, condition: F) -> impl Fn(I) -> KResult<I, I>
+where
+    I: InputTake + InputTakeAtPosition<Item = u8> + InputLength,
+    C: From<u8>,
+    F: Fn(C) -> bool,
+{
+    move |source| source.split_at_bounded_position(n, |e| !condition(e.into()))
+}
 
 /// Combine two parsers together
 /// and return the result of the first
@@ -299,6 +345,14 @@ mod tests {
     }
 
     #[test]
+    fn take_while_n_test() {
+        let parse = take_while_n(3, is_digit);
+
+        assert_eq!(parse("2000"), Ok(("0", "200")));
+        assert_eq!(parse("300"), Ok(("", "300")));
+    }
+
+    #[test]
     fn map_res_test() {
         let parse_one = tag("1");
         let to_string = map_res(&parse_one, |suffix: &str| suffix.to_string());
@@ -322,13 +376,13 @@ mod tests {
 
         let (input, http) = tag("HTTP/")(input).expect("This should work, this is a bug");
         let (input, number1) =
-            take_while(is_digit)(input).expect("This should work, this is a bug");
+            take_while_n(1, is_digit)(input).expect("This should work, this is a bug");
         let (input, dot) = tag(".")(input).expect("This should work, this is a bug");
         let (input, number2) =
-            take_while(is_digit)(input).expect("This should work, this is a bug");
+            take_while_n(1, is_digit)(input).expect("This should work, this is a bug");
         let (input, space) = tag(" ")(input).expect("This should work, this is a bug");
         let (input, two_hundred) =
-            take_while(is_digit)(input).expect("This should work, this is a bug");
+            take_while_n(3, is_digit)(input).expect("This should work, this is a bug");
         let (input, space) = tag(" ")(input).expect("This should work, this is a bug");
         let (input, ok) = tag("OK")(input).expect("This should work, this is a bug");
 
