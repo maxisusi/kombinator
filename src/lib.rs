@@ -158,6 +158,36 @@ where
     }
 }
 
+pub trait Parser<I> {
+    fn parse(&self, source: I) -> KResult<I, I>;
+}
+
+impl<I, F> Parser<I> for F
+where
+    F: Fn(I) -> KResult<I, I>,
+{
+    fn parse(&self, source: I) -> KResult<I, I> {
+        self(source)
+    }
+}
+
+/// Transform the result of a Parsing
+/// function to another type
+pub fn map_res<T, U, I, O>(parser: T, transform: U) -> impl Fn(I) -> KResult<I, O>
+where
+    I: Clone,
+    U: Fn(I) -> O,
+    T: Parser<I>,
+{
+    move |source| {
+        //TODO: Remove unwrap when error management has been worked on
+        let (suffix, prefix) = parser.parse(source).unwrap();
+        let trans = transform(prefix.clone());
+
+        Ok((suffix, trans))
+    }
+}
+
 /// Checks if char is an ascii digit
 pub fn is_digit(char: char) -> bool {
     char.is_ascii_digit()
@@ -222,6 +252,16 @@ mod tests {
 
         assert_eq!(parse("123max"), Ok(("max", "123")));
         assert_eq!(parse("12max"), Ok(("max", "12")));
+    }
+
+    #[test]
+    fn map_res_test() {
+        let parse_one = tag("1");
+        let to_string = map_res(&parse_one, |suffix: &str| suffix.to_string());
+        let to_digit = map_res(&parse_one, |suffix: &str| suffix.parse::<usize>().unwrap());
+
+        assert_eq!(to_string("123"), Ok(("23", "1".to_string())));
+        assert_eq!(to_digit("123"), Ok(("23", 1)))
     }
 
     #[test]
