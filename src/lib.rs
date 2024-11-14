@@ -319,6 +319,35 @@ where
 {
     move |source| p1.parse(source.clone()).or(p2.parse(source))
 }
+/// Sequence multiple parser together
+/// and return the result of all the parsers
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```rust
+/// use kombinator::{sequence, tag};
+///
+/// // Define the parsers
+/// let sequence = sequence(tag("http"), tag("/"), tag("1"));
+///
+/// assert_eq!(sequence("http/1"), Ok(("", ("http", "/", "1"))))
+/// ```
+pub fn sequence<P1, P2, P3, I>(p1: P1, p2: P2, p3: P3) -> impl Fn(I) -> KResult<I, (I, I, I)>
+where
+    P1: Parser<I>,
+    P2: Parser<I>,
+    P3: Parser<I>,
+{
+    move |source| {
+        let (input, res1) = p1.parse(source)?;
+        let (input, res2) = p2.parse(input)?;
+        let (input, res3) = p3.parse(input)?;
+
+        Ok((input, (res1, res2, res3)))
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -368,6 +397,12 @@ mod tests {
 
         assert_eq!(either_tag("12"), Ok(("2", "1")));
         assert_eq!(either_tag("21"), Ok(("1", "2")));
+    }
+
+    #[test]
+    fn sequence_test() {
+        let sequence = sequence(tag("http"), either(tag("/"), tag("2")), tag("1"));
+        assert_eq!(sequence("http/1"), Ok(("", ("http", "/", "1"))))
     }
 
     #[test]
