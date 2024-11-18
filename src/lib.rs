@@ -181,18 +181,29 @@ where
 
 /// Operations that represents a parser
 pub trait Parser<I> {
+    /// Defines the parser function that calls itself with the source
     fn parse(&self, source: I) -> KResult<I, I>;
+    /// If the parser itself fails, run the other one
+    fn or<P>(&self, parser: P) -> impl Fn(I) -> KResult<I, I>
+    where
+        P: Fn(I) -> KResult<I, I>;
 }
 
 impl<I, F> Parser<I> for F
 where
+    I: Clone,
     F: Fn(I) -> KResult<I, I>,
 {
     fn parse(&self, source: I) -> KResult<I, I> {
         self(source)
     }
+    fn or<P>(&self, parser: P) -> impl Fn(I) -> KResult<I, I>
+    where
+        P: Fn(I) -> KResult<I, I>,
+    {
+        move |source| self(source.clone()).or(parser(source.clone()))
+    }
 }
-
 /// Transform the result of a Parsing
 /// function to another type
 ///
@@ -397,6 +408,12 @@ mod tests {
 
         assert_eq!(either_tag("12"), Ok(("2", "1")));
         assert_eq!(either_tag("21"), Ok(("1", "2")));
+    }
+
+    #[test]
+    fn or_test() {
+        let or_parser = tag("1").or(tag("2")).or(take_while(is_alphabetic))("A32");
+        assert_eq!(or_parser, Ok(("32", "A")));
     }
 
     #[test]
