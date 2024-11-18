@@ -359,9 +359,52 @@ where
         Ok((input, (res1, res2, res3)))
     }
 }
+/// Will try every parsers definie in the
+/// vector and return the first one that
+/// matches
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```rust
+/// use kombinator::{try_all, tag};
+///
+/// // Define the try_parsers
+/// let try_parsers = try_all(vec![
+///    tag("GET"),
+///    tag("POST"),
+///    tag("PUT"),
+///    tag("OPTIONS"),
+///    tag("HEAD"),
+///    ]);
+///
+/// assert_eq!(try_parsers("GET smt"), Ok((" smt", "GET")));
+/// assert_eq!(try_parsers("POST smt"), Ok((" smt", "POST")));
+/// assert_eq!(try_parsers("PUT smt"), Ok((" smt", "PUT")));
+/// assert_eq!(try_parsers("OPTIONS smt"), Ok((" smt", "OPTIONS")));
+/// assert_eq!(try_parsers("HEAD smt"), Ok((" smt", "HEAD")))
+/// ```
+pub fn try_all<T, I>(parsers: Vec<T>) -> impl Fn(I) -> KResult<I, I>
+where
+    I: Copy,
+    T: Parser<I>,
+{
+    move |source| {
+        for parser in parsers.as_slice() {
+            if let Ok(res) = parser.parse(source) {
+                return Ok(res);
+            } else {
+                continue;
+            }
+        }
+        Err(ParserError::NoMatch)
+    }
+}
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -414,6 +457,23 @@ mod tests {
     fn or_test() {
         let or_parser = tag("1").or(tag("2")).or(take_while(is_alphabetic))("A32");
         assert_eq!(or_parser, Ok(("32", "A")));
+    }
+
+    #[test]
+    fn try_all_test() {
+        let try_parsers = try_all(vec![
+            tag("GET"),
+            tag("POST"),
+            tag("PUT"),
+            tag("OPTIONS"),
+            tag("HEAD"),
+        ]);
+
+        assert_eq!(try_parsers("GET smt"), Ok((" smt", "GET")));
+        assert_eq!(try_parsers("POST smt"), Ok((" smt", "POST")));
+        assert_eq!(try_parsers("PUT smt"), Ok((" smt", "PUT")));
+        assert_eq!(try_parsers("OPTIONS smt"), Ok((" smt", "OPTIONS")));
+        assert_eq!(try_parsers("HEAD smt"), Ok((" smt", "HEAD")))
     }
 
     #[test]
